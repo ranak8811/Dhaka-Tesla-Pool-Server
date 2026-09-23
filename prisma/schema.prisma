@@ -1,0 +1,117 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  PASSENGER
+  DRIVER
+}
+
+enum PoolStatus {
+  OPEN
+  FULL
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+enum RideStatus {
+  REQUESTED
+  MATCHED
+  DRIVER_ARRIVED
+  STARTED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  name         String
+  role         Role          @default(PASSENGER)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  
+  vehicle      Vehicle?
+  rideRequests RideRequest[]
+
+  @@map("users")
+}
+
+model Vehicle {
+  id          String   @id @default(uuid())
+  driverId    String   @unique @map("driver_id")
+  name        String   @default("Bullet")
+  maxCapacity Int      @default(3) @map("max_capacity")
+  isOnline    Boolean  @default(false) @map("is_online")
+  currentZone String   @default("Banani") @map("current_zone")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  driver      User     @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  pools       Pool[]
+
+  @@map("vehicles")
+}
+
+model Pool {
+  id            String       @id @default(uuid())
+  vehicleId     String       @map("vehicle_id")
+  status        PoolStatus   @default(OPEN)
+  occupiedSeats Int          @default(0) @map("occupied_seats")
+  pickupZone    String       @map("pickup_zone")
+  corridor      String
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  vehicle       Vehicle      @relation(fields: [vehicleId], references: [id])
+  rideRequests  RideRequest[]
+
+  @@map("pools")
+}
+
+model RideRequest {
+  id                   String        @id @default(uuid())
+  passengerId          String        @map("passenger_id")
+  poolId               String?       @map("pool_id")
+  pickupZone           String        @map("pickup_zone")
+  destinationZone      String        @map("destination_zone")
+  seatsRequested       Int           @default(1) @map("seats_requested")
+  status               RideStatus    @default(REQUESTED)
+  
+  baseFarePoysha       Int           @map("base_fare_poysha")
+  distanceChargePoysha Int           @map("distance_charge_poysha")
+  poolDiscountPoysha   Int           @default(0) @map("pool_discount_poysha")
+  totalFarePoysha      Int           @map("total_fare_poysha")
+  paymentStatus        PaymentStatus @default(PENDING) @map("payment_status")
+  
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+
+  passenger            User          @relation(fields: [passengerId], references: [id])
+  pool                 Pool?         @relation(fields: [poolId], references: [id])
+  statusLogs           RideStatusLog[]
+
+  @@map("ride_requests")
+}
+
+model RideStatusLog {
+  id             String      @id @default(uuid())
+  rideId         String      @map("ride_id")
+  previousStatus String?     @map("previous_status")
+  newStatus      String      @map("new_status")
+  changedBy      String      @map("changed_by")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  rideRequest    RideRequest @relation(fields: [rideId], references: [id], onDelete: Cascade)
+
+  @@map("ride_status_logs")
+}
