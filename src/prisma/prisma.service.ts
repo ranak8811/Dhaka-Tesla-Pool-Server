@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -5,9 +6,10 @@ import { PrismaPg } from '@prisma/adapter-pg';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    const adapter = new PrismaPg({
-      connectionString: process.env.DATABASE_URL as string,
-    });
+    const connectionString =
+      process.env.DATABASE_URL ||
+      'postgresql://tesla_admin:tesla_secret_password@localhost:5432/dhaka_tesla_pool?schema=public';
+    const adapter = new PrismaPg({ connectionString });
     super({ adapter });
   }
 
