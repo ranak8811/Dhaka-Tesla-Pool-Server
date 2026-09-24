@@ -1,17 +1,30 @@
 import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class CreateRideDto {
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  pickupZone: string;
+  poolId?: string;
 
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  destinationZone: string;
+  pickupZone?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  destinationZone?: string;
 
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(3)
-  seatsRequested?: number = 1;
+  seatsRequested?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  seats?: number;
 }

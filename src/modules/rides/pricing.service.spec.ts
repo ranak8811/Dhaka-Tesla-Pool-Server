@@ -10,11 +10,6 @@ describe('PricingService', () => {
 
   describe('calculateFare', () => {
     it('should calculate Nusrat trip correctly (Banani -> Mohakhali = 3.5 km, pooled)', () => {
-      // 3.5 km * 1500 = 5250 poysha distance charge
-      // Base: 2500 poysha
-      // Gross: 7750 poysha
-      // Discount (25%): round(7750 * 0.25) = 1938 poysha
-      // Net: 7750 - 1938 = 5812 poysha (58.12 BDT)
       const fare = pricingService.calculateFare(3.5, true);
 
       expect(fare.distanceKm).toBe(3.5);
@@ -26,11 +21,6 @@ describe('PricingService', () => {
     });
 
     it('should calculate Rafiq trip correctly (Banani -> Gulshan 1 = 3.0 km, pooled)', () => {
-      // 3.0 km * 1500 = 4500 poysha distance charge
-      // Base: 2500 poysha
-      // Gross: 7000 poysha
-      // Discount (25%): round(7000 * 0.25) = 1750 poysha
-      // Net: 7000 - 1750 = 5250 poysha (52.50 BDT)
       const fare = pricingService.calculateFare(3.0, true);
 
       expect(fare.distanceKm).toBe(3.0);
@@ -42,10 +32,6 @@ describe('PricingService', () => {
     });
 
     it('should calculate Solo Ride fare without discount (3.5 km, solo)', () => {
-      // Base: 2500 poysha
-      // Distance (3.5 km): 5250 poysha
-      // Discount: 0 poysha
-      // Total: 7750 poysha (77.50 BDT)
       const fare = pricingService.calculateFare(3.5, false);
 
       expect(fare.distanceKm).toBe(3.5);
@@ -67,16 +53,13 @@ describe('PricingService', () => {
       expect(quote.baseFarePoysha).toBe(2500);
       expect(quote.distanceChargePoysha).toBe(5250);
 
-      // Solo
       expect(quote.solo.totalFarePoysha).toBe(7750);
       expect(quote.solo.totalFareBdt).toBe(77.50);
 
-      // Pooled
       expect(quote.pooled.poolDiscountPoysha).toBe(1938);
       expect(quote.pooled.totalFarePoysha).toBe(5812);
       expect(quote.pooled.totalFareBdt).toBe(58.12);
 
-      // Savings: 77.50 - 58.12 = 19.38
       expect(quote.pooled.savingsBdt).toBe(19.38);
     });
   });

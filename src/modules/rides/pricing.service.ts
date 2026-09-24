@@ -33,9 +33,6 @@ export class PricingService {
   readonly PER_KM_POYSHA = 1500;
   readonly POOL_DISCOUNT_PERCENT = 0.25;
 
-  /**
-   * passengerFare = baseFare + distanceCharge - poolDiscount
-   */
   calculateFare(distanceKm: number, isPooled = true): FareBreakdown {
     const distanceCharge = Math.round(distanceKm * this.PER_KM_POYSHA);
     const subtotal = this.BASE_FARE_POYSHA + distanceCharge;
@@ -54,9 +51,6 @@ export class PricingService {
     };
   }
 
-  /**
-   * Generates a side-by-side fare quote comparison between Solo and Pooled rides.
-   */
   generateQuote(
     distanceKm: number,
     pickupZone?: string,

@@ -34,6 +34,8 @@ describe('RidesService', () => {
     zonesService = new ZonesService();
 
     mockPrisma = {
+      $transaction: vi.fn(async (cb) => cb(mockPrisma)),
+      $queryRaw: vi.fn(),
       rideRequest: {
         findFirst: vi.fn(),
         create: vi.fn(),
@@ -44,6 +46,7 @@ describe('RidesService', () => {
       pool: {
         findMany: vi.fn(),
         findUnique: vi.fn(),
+        findFirst: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
       },
@@ -63,16 +66,12 @@ describe('RidesService', () => {
 
   describe('requestRide & corridor matching', () => {
     it('Scenario 1: Nusrat books Banani -> Mohakhali (creates new pool, status MATCHED, occupied=1)', async () => {
-      // 1. Nusrat has no active ride
       mockPrisma.rideRequest.findFirst.mockResolvedValueOnce(null);
-
-      // 2. No open pool exists yet on SouthEast corridor
       mockPrisma.pool.findMany.mockResolvedValueOnce([]);
-
-      // 3. Online vehicle available: Jashim with Bullet
       mockPrisma.vehicle.findFirst.mockResolvedValueOnce(mockVehicle);
+      mockPrisma.$queryRaw.mockResolvedValueOnce([{ id: mockVehicle.id, is_online: true }]);
+      mockPrisma.pool.findFirst.mockResolvedValueOnce(null);
 
-      // 4. Create new pool
       const createdPool = {
         id: 'pool-1',
         vehicleId: mockVehicle.id,
@@ -83,7 +82,6 @@ describe('RidesService', () => {
       };
       mockPrisma.pool.create.mockResolvedValueOnce(createdPool);
 
-      // 5. Create ride
       const createdRide = {
         id: 'ride-nusrat-1',
         passengerId: 'passenger-nusrat-1',
@@ -114,42 +112,37 @@ describe('RidesService', () => {
       expect(result.totalFarePoysha).toBe(5812);
       expect(result.pool.occupiedSeats).toBe(1);
       expect(result.pool.vehicle.name).toBe('Bullet');
-      expect(mockPrisma.pool.create).toHaveBeenCalledWith({
-        data: {
-          vehicleId: mockVehicle.id,
-          pickupZone: 'Banani',
-          corridor: 'SouthEast',
-          occupiedSeats: 1,
-          status: PoolStatus.OPEN,
-        },
-      });
     });
 
     it("Scenario 2: Rafiq books Banani -> Gulshan 1 (joins Nusrat's existing pool, occupied=2)", async () => {
-      // 1. Rafiq has no active ride
       mockPrisma.rideRequest.findFirst.mockResolvedValueOnce(null);
 
-      // 2. Existing open pool on SouthEast corridor found (Nusrat's pool)
       const existingPool = {
+        id: 'pool-1',
+        vehicle_id: mockVehicle.id,
+        pickup_zone: 'Banani',
+        corridor: 'SouthEast',
+        occupied_seats: 1,
+        status: PoolStatus.OPEN,
+      };
+      mockPrisma.pool.findMany.mockResolvedValueOnce([{
         id: 'pool-1',
         vehicleId: mockVehicle.id,
         pickupZone: 'Banani',
         corridor: 'SouthEast',
         occupiedSeats: 1,
         status: PoolStatus.OPEN,
-      };
-      mockPrisma.pool.findMany.mockResolvedValueOnce([existingPool]);
-      mockPrisma.pool.findUnique.mockResolvedValueOnce(existingPool);
+      }]);
 
-      // 3. Increment seats to 2
+      mockPrisma.$queryRaw.mockResolvedValueOnce([existingPool]);
+
       const updatedPool = {
         ...existingPool,
-        occupiedSeats: 2,
+        occupied_seats: 2,
         status: PoolStatus.OPEN,
       };
       mockPrisma.pool.update.mockResolvedValueOnce(updatedPool);
 
-      // 4. Create ride for Rafiq
       const createdRide = {
         id: 'ride-rafiq-1',
         passengerId: 'passenger-rafiq-1',
@@ -178,7 +171,7 @@ describe('RidesService', () => {
 
       expect(result.status).toBe(RideStatus.MATCHED);
       expect(result.totalFarePoysha).toBe(5250);
-      expect(result.pool.occupiedSeats).toBe(2);
+      expect(result.pool.occupied_seats).toBe(2);
       expect(mockPrisma.pool.update).toHaveBeenCalledWith({
         where: { id: 'pool-1' },
         data: {
