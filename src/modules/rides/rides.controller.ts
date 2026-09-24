@@ -3,6 +3,9 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
+  Param,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -58,5 +61,13 @@ export class RidesController {
   @Roles(Role.PASSENGER)
   getActiveRide(@CurrentUser() user: { id: string }) {
     return this.ridesService.getActiveRide(user.id);
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PASSENGER)
+  cancelRide(@CurrentUser() user: { id: string }, @Param('id') rideId: string) {
+    return this.ridesService.cancelRide(rideId, user.id);
   }
 }
