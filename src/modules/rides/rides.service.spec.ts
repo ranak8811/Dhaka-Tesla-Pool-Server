@@ -3,7 +3,7 @@ import { RidesService } from './rides.service.js';
 import { PricingService } from './pricing.service.js';
 import { ZonesService } from '../zones/zones.service.js';
 import { PoolsService } from '../pools/pools.service.js';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PoolStatus, RideStatus } from '@prisma/client';
 
 describe('RidesService', () => {
@@ -38,7 +38,9 @@ describe('RidesService', () => {
       $queryRaw: vi.fn(),
       rideRequest: {
         findFirst: vi.fn(),
+        findUnique: vi.fn(),
         create: vi.fn(),
+        update: vi.fn(),
       },
       rideStatusLog: {
         create: vi.fn(),
@@ -218,6 +220,77 @@ describe('RidesService', () => {
       expect(result).not.toBeNull();
       expect(result?.status).toBe(RideStatus.MATCHED);
       expect(result?.pool?.vehicle?.driver?.name).toBe('Jashim Uddin');
+    });
+  });
+
+  describe('cancelRide', () => {
+    const mockRide = {
+      id: 'ride-1',
+      passengerId: 'passenger-nusrat-1',
+      poolId: 'pool-1',
+      seatsRequested: 1,
+      status: RideStatus.MATCHED,
+      pool: {
+        id: 'pool-1',
+        occupiedSeats: 2,
+        status: PoolStatus.OPEN,
+      },
+    };
+
+    it('Scenario 3: Nusrat cancels while status is MATCHED (succeeds and releases seat)', async () => {
+      mockPrisma.rideRequest.findUnique.mockResolvedValueOnce(mockRide);
+      mockPrisma.rideRequest.update.mockResolvedValueOnce({
+        ...mockRide,
+        status: RideStatus.CANCELLED,
+      });
+      mockPrisma.pool.update.mockResolvedValueOnce({});
+      mockPrisma.rideStatusLog.create.mockResolvedValueOnce({});
+
+      const result = await ridesService.cancelRide('ride-1', 'passenger-nusrat-1');
+
+      expect(result.status).toBe(RideStatus.CANCELLED);
+      expect(mockPrisma.pool.update).toHaveBeenCalledWith({
+        where: { id: 'pool-1' },
+        data: {
+          occupiedSeats: 1,
+          status: PoolStatus.OPEN,
+        },
+      });
+      expect(mockPrisma.rideStatusLog.create).toHaveBeenCalledWith({
+        data: {
+          rideId: 'ride-1',
+          previousStatus: RideStatus.MATCHED,
+          newStatus: RideStatus.CANCELLED,
+          changedBy: 'passenger-nusrat-1',
+        },
+      });
+    });
+
+    it('Scenario 4: Nusrat attempts to cancel while STARTED (rejects with 400)', async () => {
+      mockPrisma.rideRequest.findUnique.mockResolvedValueOnce({
+        ...mockRide,
+        status: RideStatus.STARTED,
+      });
+
+      await expect(
+        ridesService.cancelRide('ride-1', 'passenger-nusrat-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws ForbiddenException when user attempts cross-tenant cancellation', async () => {
+      mockPrisma.rideRequest.findUnique.mockResolvedValueOnce(mockRide);
+
+      await expect(
+        ridesService.cancelRide('ride-1', 'other-passenger-id'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws NotFoundException when ride does not exist', async () => {
+      mockPrisma.rideRequest.findUnique.mockResolvedValueOnce(null);
+
+      await expect(
+        ridesService.cancelRide('non-existent', 'passenger-nusrat-1'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

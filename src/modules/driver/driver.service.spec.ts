@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DriverService } from './driver.service.js';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PoolStatus, RideStatus } from '@prisma/client';
 
 describe('DriverService', () => {
@@ -18,12 +18,21 @@ describe('DriverService', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      $transaction: vi.fn(async (cb) => cb(mockPrisma)),
       vehicle: {
         findUnique: vi.fn(),
         update: vi.fn(),
       },
       pool: {
+        findUnique: vi.fn(),
         findFirst: vi.fn(),
+        update: vi.fn(),
+      },
+      rideRequest: {
+        updateMany: vi.fn(),
+      },
+      rideStatusLog: {
+        create: vi.fn(),
       },
     };
 
@@ -129,6 +138,105 @@ describe('DriverService', () => {
 
       const result = await service.getActivePool('driver-jashim');
       expect(result).toBeNull();
+    });
+  });
+
+  describe('updatePoolStatus (FSM)', () => {
+    const activeRides = [
+      { id: 'ride-1', status: RideStatus.MATCHED },
+      { id: 'ride-2', status: RideStatus.MATCHED },
+    ];
+
+    it('Scenario 1: Jashim transitions MATCHED -> DRIVER_ARRIVED', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(mockVehicle);
+      mockPrisma.pool.findUnique.mockResolvedValueOnce({
+        id: 'pool-1',
+        vehicleId: 'veh-1',
+        status: PoolStatus.OPEN,
+        rideRequests: activeRides,
+      });
+
+      mockPrisma.pool.update.mockResolvedValueOnce({
+        id: 'pool-1',
+        status: PoolStatus.OPEN,
+      });
+
+      const result = await service.updatePoolStatus(
+        'driver-jashim',
+        'pool-1',
+        RideStatus.DRIVER_ARRIVED,
+      );
+
+      expect(result.rideStatus).toBe(RideStatus.DRIVER_ARRIVED);
+      expect(result.updatedRidesCount).toBe(2);
+      expect(mockPrisma.rideRequest.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['ride-1', 'ride-2'] } },
+        data: { status: RideStatus.DRIVER_ARRIVED },
+      });
+      expect(mockPrisma.rideStatusLog.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('Scenario 2: Jashim transitions DRIVER_ARRIVED -> STARTED', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(mockVehicle);
+      mockPrisma.pool.findUnique.mockResolvedValueOnce({
+        id: 'pool-1',
+        vehicleId: 'veh-1',
+        status: PoolStatus.OPEN,
+        rideRequests: [
+          { id: 'ride-1', status: RideStatus.DRIVER_ARRIVED },
+          { id: 'ride-2', status: RideStatus.DRIVER_ARRIVED },
+        ],
+      });
+
+      mockPrisma.pool.update.mockResolvedValueOnce({
+        id: 'pool-1',
+        status: PoolStatus.IN_TRANSIT,
+      });
+
+      const result = await service.updatePoolStatus(
+        'driver-jashim',
+        'pool-1',
+        RideStatus.STARTED,
+      );
+
+      expect(result.status).toBe(PoolStatus.IN_TRANSIT);
+      expect(result.rideStatus).toBe(RideStatus.STARTED);
+    });
+
+    it('Scenario 5: Invalid transition MATCHED -> COMPLETED throws 400 Bad Request', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(mockVehicle);
+      mockPrisma.pool.findUnique.mockResolvedValueOnce({
+        id: 'pool-1',
+        vehicleId: 'veh-1',
+        status: PoolStatus.OPEN,
+        rideRequests: activeRides,
+      });
+
+      await expect(
+        service.updatePoolStatus(
+          'driver-jashim',
+          'pool-1',
+          RideStatus.COMPLETED,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws ForbiddenException if driver does not own vehicle', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(mockVehicle);
+      mockPrisma.pool.findUnique.mockResolvedValueOnce({
+        id: 'pool-1',
+        vehicleId: 'other-vehicle',
+        status: PoolStatus.OPEN,
+        rideRequests: activeRides,
+      });
+
+      await expect(
+        service.updatePoolStatus(
+          'driver-jashim',
+          'pool-1',
+          RideStatus.DRIVER_ARRIVED,
+        ),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 });

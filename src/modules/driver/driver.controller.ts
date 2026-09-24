@@ -4,11 +4,14 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import { DriverService } from './driver.service.js';
 import { ToggleStatusDto } from './dto/toggle-status.dto.js';
+import { UpdateTripStatusDto } from './dto/update-trip-status.dto.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -33,5 +36,14 @@ export class DriverController {
   @Get('active-pool')
   getActivePool(@CurrentUser() user: { id: string }) {
     return this.driverService.getActivePool(user.id);
+  }
+
+  @Patch('pools/:poolId/status')
+  updatePoolStatus(
+    @CurrentUser() user: { id: string },
+    @Param('poolId') poolId: string,
+    @Body() dto: UpdateTripStatusDto,
+  ) {
+    return this.driverService.updatePoolStatus(user.id, poolId, dto.status);
   }
 }

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,7 +9,7 @@ import { ZonesService } from '../zones/zones.service.js';
 import { PricingService } from './pricing.service.js';
 import { PoolsService } from '../pools/pools.service.js';
 import { CreateRideDto } from './dto/create-ride.dto.js';
-import { RideStatus } from '@prisma/client';
+import { PoolStatus, RideStatus } from '@prisma/client';
 
 @Injectable()
 export class RidesService {
@@ -148,6 +149,73 @@ export class RidesService {
           },
         },
       },
+    });
+  }
+
+  async cancelRide(rideId: string, userId: string) {
+    const ride = await this.prisma.rideRequest.findUnique({
+      where: { id: rideId },
+      include: { pool: true },
+    });
+
+    if (!ride) {
+      throw new NotFoundException(`Ride with id ${rideId} not found`);
+    }
+
+    if (ride.passengerId !== userId) {
+      throw new ForbiddenException('You can only cancel your own rides');
+    }
+
+    if (ride.status === RideStatus.CANCELLED) {
+      throw new BadRequestException('Ride is already cancelled');
+    }
+
+    if (
+      ride.status === RideStatus.STARTED ||
+      ride.status === RideStatus.COMPLETED
+    ) {
+      throw new BadRequestException('Cannot cancel ride in transit or already completed');
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      const updatedRide = await tx.rideRequest.update({
+        where: { id: rideId },
+        data: { status: RideStatus.CANCELLED },
+      });
+
+      await tx.rideStatusLog.create({
+        data: {
+          rideId,
+          previousStatus: ride.status,
+          newStatus: RideStatus.CANCELLED,
+          changedBy: userId,
+        },
+      });
+
+      if (ride.poolId && ride.pool) {
+        const remainingSeats = Math.max(
+          0,
+          ride.pool.occupiedSeats - ride.seatsRequested,
+        );
+        const newPoolStatus =
+          ride.pool.status === PoolStatus.FULL && remainingSeats < 3
+            ? PoolStatus.OPEN
+            : ride.pool.status;
+
+        await tx.pool.update({
+          where: { id: ride.poolId },
+          data: {
+            occupiedSeats: remainingSeats,
+            status: newPoolStatus,
+          },
+        });
+      }
+
+      return {
+        rideId: updatedRide.id,
+        status: RideStatus.CANCELLED,
+        message: 'Ride cancelled successfully. Seat released.',
+      };
     });
   }
 }

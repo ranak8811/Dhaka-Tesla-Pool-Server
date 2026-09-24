@@ -1,7 +1,21 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { PoolStatus } from '@prisma/client';
+import { PaymentStatus, PoolStatus, RideStatus } from '@prisma/client';
 import { ToggleStatusDto } from './dto/toggle-status.dto.js';
+
+export const VALID_RIDE_TRANSITIONS: Record<RideStatus, RideStatus[]> = {
+  [RideStatus.REQUESTED]: [RideStatus.MATCHED, RideStatus.CANCELLED],
+  [RideStatus.MATCHED]: [RideStatus.DRIVER_ARRIVED, RideStatus.CANCELLED],
+  [RideStatus.DRIVER_ARRIVED]: [RideStatus.STARTED, RideStatus.CANCELLED],
+  [RideStatus.STARTED]: [RideStatus.COMPLETED],
+  [RideStatus.COMPLETED]: [],
+  [RideStatus.CANCELLED]: [],
+};
 
 @Injectable()
 export class DriverService {
@@ -63,7 +77,7 @@ export class DriverService {
       },
       include: {
         rideRequests: {
-          where: { status: { not: 'CANCELLED' } },
+          where: { status: { not: RideStatus.CANCELLED } },
           include: { passenger: true },
           orderBy: { createdAt: 'asc' },
         },
@@ -91,5 +105,94 @@ export class DriverService {
         fareBdt: Number((ride.totalFarePoysha / 100).toFixed(2)),
       })),
     };
+  }
+
+  async updatePoolStatus(
+    driverId: string,
+    poolId: string,
+    targetStatus: RideStatus,
+  ) {
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { driverId },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found for this driver');
+    }
+
+    const pool = await this.prisma.pool.findUnique({
+      where: { id: poolId },
+      include: {
+        rideRequests: {
+          where: { status: { not: RideStatus.CANCELLED } },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!pool) {
+      throw new NotFoundException(`Pool with id ${poolId} not found`);
+    }
+
+    if (pool.vehicleId !== vehicle.id) {
+      throw new ForbiddenException('You can only update trips for your own vehicle');
+    }
+
+    if (pool.rideRequests.length === 0) {
+      throw new BadRequestException('No active rides in this pool');
+    }
+
+    for (const ride of pool.rideRequests) {
+      const allowedTargets = VALID_RIDE_TRANSITIONS[ride.status] || [];
+      if (!allowedTargets.includes(targetStatus)) {
+        throw new BadRequestException(
+          `Illegal state transition from ${ride.status} to ${targetStatus}`,
+        );
+      }
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      let newPoolStatus = pool.status;
+      if (targetStatus === RideStatus.STARTED) {
+        newPoolStatus = PoolStatus.IN_TRANSIT;
+      } else if (targetStatus === RideStatus.COMPLETED) {
+        newPoolStatus = PoolStatus.COMPLETED;
+      }
+
+      const updatedPool = await tx.pool.update({
+        where: { id: poolId },
+        data: { status: newPoolStatus },
+      });
+
+      const activeRideIds = pool.rideRequests.map((r) => r.id);
+
+      await tx.rideRequest.updateMany({
+        where: { id: { in: activeRideIds } },
+        data: {
+          status: targetStatus,
+          ...(targetStatus === RideStatus.COMPLETED
+            ? { paymentStatus: PaymentStatus.PAID }
+            : {}),
+        },
+      });
+
+      for (const ride of pool.rideRequests) {
+        await tx.rideStatusLog.create({
+          data: {
+            rideId: ride.id,
+            previousStatus: ride.status,
+            newStatus: targetStatus,
+            changedBy: driverId,
+          },
+        });
+      }
+
+      return {
+        poolId: updatedPool.id,
+        status: updatedPool.status,
+        rideStatus: targetStatus,
+        updatedRidesCount: activeRideIds.length,
+      };
+    });
   }
 }
