@@ -1,13 +1,28 @@
-import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { PricingService } from './pricing.service.js';
 import { ZonesService } from '../zones/zones.service.js';
+import { RidesService } from './rides.service.js';
 import { QuoteRequestDto } from './dto/quote-request.dto.js';
+import { CreateRideDto } from './dto/create-ride.dto.js';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../../common/guards/roles.guard.js';
+import { Roles } from '../../common/decorators/roles.decorator.js';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { Role } from '@prisma/client';
 
 @Controller('rides')
 export class RidesController {
   constructor(
     private readonly pricingService: PricingService,
     private readonly zonesService: ZonesService,
+    private readonly ridesService: RidesService,
   ) {}
 
   @Post('quote')
@@ -29,5 +44,19 @@ export class RidesController {
     }
 
     return this.pricingService.generateQuote(distanceKm, pickupZone, destinationZone);
+  }
+
+  @Post('request')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PASSENGER)
+  requestRide(@CurrentUser() user: { id: string }, @Body() dto: CreateRideDto) {
+    return this.ridesService.requestRide(user.id, dto);
+  }
+
+  @Get('active')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PASSENGER)
+  getActiveRide(@CurrentUser() user: { id: string }) {
+    return this.ridesService.getActiveRide(user.id);
   }
 }
