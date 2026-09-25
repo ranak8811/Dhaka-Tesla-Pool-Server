@@ -62,6 +62,12 @@ export class RidesService {
       const toZone = this.zonesService.getZone(destinationZoneName);
       const distanceKm = this.zonesService.getDistanceKm(fromZone.id, toZone.id);
       const fare = this.pricingService.calculateFare(distanceKm, true);
+      const scaledFare = {
+        baseFarePoysha: fare.baseFarePoysha * seatsRequested,
+        distanceChargePoysha: fare.distanceChargePoysha * seatsRequested,
+        poolDiscountPoysha: fare.poolDiscountPoysha * seatsRequested,
+        totalFarePoysha: fare.totalFarePoysha * seatsRequested,
+      };
 
       return await this.poolsService.reserveSeatAtomic(
         targetPool.id,
@@ -70,7 +76,7 @@ export class RidesService {
         {
           pickupZone: fromZone.name,
           destinationZone: toZone.name,
-          ...fare,
+          ...scaledFare,
         },
       );
     }
@@ -86,6 +92,13 @@ export class RidesService {
     const distanceKm = this.zonesService.getDistanceKm(fromZone.id, toZone.id);
     const fare = this.pricingService.calculateFare(distanceKm, true);
 
+    const scaledFare = {
+      baseFarePoysha: fare.baseFarePoysha * seatsRequested,
+      distanceChargePoysha: fare.distanceChargePoysha * seatsRequested,
+      poolDiscountPoysha: fare.poolDiscountPoysha * seatsRequested,
+      totalFarePoysha: fare.totalFarePoysha * seatsRequested,
+    };
+
     const pool = await this.poolsService.findCompatibleOpenPool(
       fromZone.name,
       toZone.corridor,
@@ -100,7 +113,7 @@ export class RidesService {
         {
           pickupZone: fromZone.name,
           destinationZone: toZone.name,
-          ...fare,
+          ...scaledFare,
         },
       );
     }
@@ -119,7 +132,7 @@ export class RidesService {
       toZone.name,
       toZone.corridor,
       seatsRequested,
-      fare,
+      scaledFare,
     );
   }
 
