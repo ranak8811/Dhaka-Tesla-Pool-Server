@@ -38,6 +38,11 @@ export class DriverController {
     return this.driverService.getActivePool(user.id);
   }
 
+  @Get('history')
+  getHistory(@CurrentUser() user: { id: string }) {
+    return this.driverService.getDriverHistory(user.id);
+  }
+
   @Patch('pools/:poolId/status')
   updatePoolStatus(
     @CurrentUser() user: { id: string },

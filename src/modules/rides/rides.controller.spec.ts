@@ -45,4 +45,15 @@ describe('RidesController', () => {
   it('should throw BadRequestException if neither zones nor distanceKm provided', () => {
     expect(() => controller.getQuote({})).toThrow(BadRequestException);
   });
+
+  it('should delegate getHistory to ridesService.getPassengerHistory with current user id', async () => {
+    const mockRidesService: any = {
+      getPassengerHistory: vi.fn().mockResolvedValueOnce([{ id: 'ride-1' }]),
+    };
+    const ctrl = new RidesController(pricingService, zonesService, mockRidesService);
+    const result = await ctrl.getHistory({ id: 'passenger-nusrat-1' });
+
+    expect(mockRidesService.getPassengerHistory).toHaveBeenCalledWith('passenger-nusrat-1');
+    expect(result).toEqual([{ id: 'ride-1' }]);
+  });
 });

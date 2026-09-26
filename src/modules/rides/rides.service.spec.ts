@@ -39,6 +39,7 @@ describe('RidesService', () => {
       rideRequest: {
         findFirst: vi.fn(),
         findUnique: vi.fn(),
+        findMany: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
       },
@@ -291,6 +292,113 @@ describe('RidesService', () => {
       await expect(
         ridesService.cancelRide('non-existent', 'passenger-nusrat-1'),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getPassengerHistory', () => {
+    it('returns formatted past rides with driver info and status logs', async () => {
+      const mockHistoryRecord = {
+        id: 'ride-past-1',
+        passengerId: 'passenger-nusrat-1',
+        pickupZone: 'Banani',
+        destinationZone: 'Mohakhali',
+        seatsRequested: 1,
+        status: RideStatus.COMPLETED,
+        totalFarePoysha: 5812,
+        paymentStatus: 'PAID',
+        createdAt: new Date('2026-09-26T10:00:00Z'),
+        updatedAt: new Date('2026-09-26T10:20:00Z'),
+        pool: {
+          vehicle: {
+            name: 'Bullet',
+            driver: {
+              id: 'driver-jashim-1',
+              name: 'Jashim Uddin',
+              email: 'jashim@tesla.dhaka',
+            },
+          },
+        },
+        statusLogs: [
+          {
+            previousStatus: RideStatus.REQUESTED,
+            newStatus: RideStatus.MATCHED,
+            createdAt: new Date('2026-09-26T10:01:00Z'),
+          },
+          {
+            previousStatus: RideStatus.STARTED,
+            newStatus: RideStatus.COMPLETED,
+            createdAt: new Date('2026-09-26T10:20:00Z'),
+          },
+        ],
+      };
+
+      mockPrisma.rideRequest.findMany.mockResolvedValueOnce([mockHistoryRecord]);
+
+      const result = await ridesService.getPassengerHistory('passenger-nusrat-1');
+
+      expect(mockPrisma.rideRequest.findMany).toHaveBeenCalledWith({
+        where: {
+          passengerId: 'passenger-nusrat-1',
+          status: {
+            in: [RideStatus.COMPLETED, RideStatus.CANCELLED],
+          },
+        },
+        include: {
+          pool: {
+            include: {
+              vehicle: {
+                include: {
+                  driver: {
+                    select: { id: true, name: true, email: true },
+                  },
+                },
+              },
+            },
+          },
+          statusLogs: {
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        id: 'ride-past-1',
+        pickupZone: 'Banani',
+        destinationZone: 'Mohakhali',
+        seatsRequested: 1,
+        status: RideStatus.COMPLETED,
+        totalFarePoysha: 5812,
+        fareBdt: 58.12,
+        paymentStatus: 'PAID',
+        createdAt: mockHistoryRecord.createdAt,
+        updatedAt: mockHistoryRecord.updatedAt,
+        driver: {
+          name: 'Jashim Uddin',
+          vehicleName: 'Bullet',
+        },
+        statusLogs: [
+          {
+            previousStatus: RideStatus.REQUESTED,
+            newStatus: RideStatus.MATCHED,
+            timestamp: mockHistoryRecord.statusLogs[0].createdAt,
+          },
+          {
+            previousStatus: RideStatus.STARTED,
+            newStatus: RideStatus.COMPLETED,
+            timestamp: mockHistoryRecord.statusLogs[1].createdAt,
+          },
+        ],
+      });
+    });
+
+    it('returns empty array when passenger has no completed or cancelled rides', async () => {
+      mockPrisma.rideRequest.findMany.mockResolvedValueOnce([]);
+
+      const result = await ridesService.getPassengerHistory('passenger-new-1');
+
+      expect(result).toEqual([]);
     });
   });
 });

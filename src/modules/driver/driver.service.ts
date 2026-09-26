@@ -195,4 +195,57 @@ export class DriverService {
       };
     });
   }
+
+  async getDriverHistory(driverId: string) {
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { driverId },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found for this driver');
+    }
+
+    const pools = await this.prisma.pool.findMany({
+      where: {
+        vehicleId: vehicle.id,
+        status: PoolStatus.COMPLETED,
+      },
+      include: {
+        rideRequests: {
+          include: {
+            passenger: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return pools.map((pool) => {
+      const totalEarningsPoysha = pool.rideRequests
+        .filter((r) => r.status === RideStatus.COMPLETED)
+        .reduce((sum, r) => sum + r.totalFarePoysha, 0);
+
+      return {
+        poolId: pool.id,
+        pickupZone: pool.pickupZone,
+        corridor: pool.corridor,
+        status: pool.status,
+        occupiedSeats: pool.occupiedSeats,
+        createdAt: pool.createdAt,
+        totalEarningsBdt: Number((totalEarningsPoysha / 100).toFixed(2)),
+        passengers: pool.rideRequests.map((ride) => ({
+          rideId: ride.id,
+          name: ride.passenger.name,
+          pickup: ride.pickupZone,
+          drop: ride.destinationZone,
+          seats: ride.seatsRequested,
+          status: ride.status,
+          fareBdt: Number((ride.totalFarePoysha / 100).toFixed(2)),
+        })),
+      };
+    });
+  }
 }
