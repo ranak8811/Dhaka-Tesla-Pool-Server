@@ -231,4 +231,56 @@ export class RidesService {
       };
     });
   }
+
+  async getPassengerHistory(passengerId: string) {
+    const rides = await this.prisma.rideRequest.findMany({
+      where: {
+        passengerId,
+        status: {
+          in: [RideStatus.COMPLETED, RideStatus.CANCELLED],
+        },
+      },
+      include: {
+        pool: {
+          include: {
+            vehicle: {
+              include: {
+                driver: {
+                  select: { id: true, name: true, email: true },
+                },
+              },
+            },
+          },
+        },
+        statusLogs: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return rides.map((ride) => ({
+      id: ride.id,
+      pickupZone: ride.pickupZone,
+      destinationZone: ride.destinationZone,
+      seatsRequested: ride.seatsRequested,
+      status: ride.status,
+      totalFarePoysha: ride.totalFarePoysha,
+      fareBdt: Number((ride.totalFarePoysha / 100).toFixed(2)),
+      paymentStatus: ride.paymentStatus,
+      createdAt: ride.createdAt,
+      updatedAt: ride.updatedAt,
+      driver: ride.pool?.vehicle?.driver
+        ? {
+            name: ride.pool.vehicle.driver.name,
+            vehicleName: ride.pool.vehicle.name,
+          }
+        : null,
+      statusLogs: ride.statusLogs.map((log) => ({
+        previousStatus: log.previousStatus,
+        newStatus: log.newStatus,
+        timestamp: log.createdAt,
+      })),
+    }));
+  }
 }

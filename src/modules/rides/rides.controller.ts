@@ -63,6 +63,13 @@ export class RidesController {
     return this.ridesService.getActiveRide(user.id);
   }
 
+  @Get('history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PASSENGER)
+  getHistory(@CurrentUser() user: { id: string }) {
+    return this.ridesService.getPassengerHistory(user.id);
+  }
+
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard, RolesGuard)
