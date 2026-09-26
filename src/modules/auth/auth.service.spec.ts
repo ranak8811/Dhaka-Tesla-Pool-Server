@@ -25,6 +25,7 @@ describe('AuthService (STORY-005)', () => {
       user: {
         findUnique: vi.fn(),
         create: vi.fn(),
+        update: vi.fn(),
       },
     };
 
@@ -134,6 +135,47 @@ describe('AuthService (STORY-005)', () => {
           password: 'AnyPassword!',
         }),
       ).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('TeslaPay Wallet (getProfile & topupWallet)', () => {
+    it('returns profile with wallet balance in Poysha and BDT', async () => {
+      prismaService.user.findUnique.mockResolvedValueOnce({
+        ...mockUser,
+        walletBalancePoysha: 50000,
+      });
+
+      const profile = await authService.getProfile('user-uuid-123');
+
+      expect(profile.walletBalancePoysha).toBe(50000);
+      expect(profile.walletBalanceBdt).toBe(500.0);
+    });
+
+    it('tops up wallet balance and returns updated balance', async () => {
+      prismaService.user.update.mockResolvedValueOnce({
+        id: 'user-uuid-123',
+        name: 'Nusrat',
+        walletBalancePoysha: 75000,
+      });
+
+      const result = await authService.topupWallet('user-uuid-123', 250);
+
+      expect(prismaService.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-uuid-123' },
+        data: {
+          walletBalancePoysha: {
+            increment: 25000,
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          walletBalancePoysha: true,
+        },
+      });
+
+      expect(result.walletBalancePoysha).toBe(75000);
+      expect(result.walletBalanceBdt).toBe(750.0);
     });
   });
 });

@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { PaymentStatus, Pool, PoolStatus, RideStatus, Vehicle } from '@prisma/client';
+import { PaymentMethod, PaymentStatus, Pool, PoolStatus, RideStatus, Vehicle } from '@prisma/client';
 
 export interface FareCalculationDetails {
   pickupZone: string;
@@ -14,6 +14,7 @@ export interface FareCalculationDetails {
   distanceChargePoysha: number;
   poolDiscountPoysha: number;
   totalFarePoysha: number;
+  paymentMethod?: PaymentMethod;
 }
 
 @Injectable()
@@ -109,6 +110,7 @@ export class PoolsService {
           distanceChargePoysha: fareDetails.distanceChargePoysha,
           poolDiscountPoysha: fareDetails.poolDiscountPoysha,
           totalFarePoysha: fareDetails.totalFarePoysha,
+          paymentMethod: fareDetails.paymentMethod ?? PaymentMethod.TESLAPAY,
           paymentStatus: PaymentStatus.PENDING,
         },
         include: {
@@ -160,6 +162,7 @@ export class PoolsService {
       distanceChargePoysha: number;
       poolDiscountPoysha: number;
       totalFarePoysha: number;
+      paymentMethod?: PaymentMethod;
     },
   ) {
     return await this.prisma.$transaction(async (tx) => {
@@ -212,6 +215,7 @@ export class PoolsService {
           distanceChargePoysha: fareDetails.distanceChargePoysha,
           poolDiscountPoysha: fareDetails.poolDiscountPoysha,
           totalFarePoysha: fareDetails.totalFarePoysha,
+          paymentMethod: fareDetails.paymentMethod ?? PaymentMethod.TESLAPAY,
           paymentStatus: PaymentStatus.PENDING,
         },
         include: {

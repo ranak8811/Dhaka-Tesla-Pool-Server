@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { PaymentStatus, PoolStatus, RideStatus } from '@prisma/client';
+import { PaymentMethod, PaymentStatus, PoolStatus, RideStatus } from '@prisma/client';
 import { ToggleStatusDto } from './dto/toggle-status.dto.js';
 
 export const VALID_RIDE_TRANSITIONS: Record<RideStatus, RideStatus[]> = {
@@ -102,6 +102,7 @@ export class DriverService {
         destination: ride.destinationZone,
         seats: ride.seatsRequested,
         status: ride.status,
+        paymentMethod: ride.paymentMethod,
         fareBdt: Number((ride.totalFarePoysha / 100).toFixed(2)),
       })),
     };
@@ -176,6 +177,21 @@ export class DriverService {
         },
       });
 
+      if (targetStatus === RideStatus.COMPLETED) {
+        for (const ride of pool.rideRequests) {
+          if (ride.paymentMethod === PaymentMethod.TESLAPAY) {
+            await tx.user.update({
+              where: { id: ride.passengerId },
+              data: {
+                walletBalancePoysha: {
+                  decrement: ride.totalFarePoysha,
+                },
+              },
+            });
+          }
+        }
+      }
+
       for (const ride of pool.rideRequests) {
         await tx.rideStatusLog.create({
           data: {
@@ -243,6 +259,7 @@ export class DriverService {
           drop: ride.destinationZone,
           seats: ride.seatsRequested,
           status: ride.status,
+          paymentMethod: ride.paymentMethod,
           fareBdt: Number((ride.totalFarePoysha / 100).toFixed(2)),
         })),
       };

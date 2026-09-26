@@ -20,12 +20,14 @@ async function main() {
       name: 'Jashim',
       passwordHash,
       role: 'DRIVER',
+      walletBalancePoysha: 100000,
     },
     create: {
       email: 'jashim@dhakatesla.com',
       passwordHash,
       name: 'Jashim',
       role: 'DRIVER',
+      walletBalancePoysha: 100000,
     },
   });
 
@@ -54,12 +56,14 @@ async function main() {
       name: 'Nusrat',
       passwordHash,
       role: 'PASSENGER',
+      walletBalancePoysha: 50000,
     },
     create: {
       email: 'nusrat@dhakatesla.com',
       passwordHash,
       name: 'Nusrat',
       role: 'PASSENGER',
+      walletBalancePoysha: 50000,
     },
   });
 
@@ -70,12 +74,14 @@ async function main() {
       name: 'Rafiq',
       passwordHash,
       role: 'PASSENGER',
+      walletBalancePoysha: 35000,
     },
     create: {
       email: 'rafiq@dhakatesla.com',
       passwordHash,
       name: 'Rafiq',
       role: 'PASSENGER',
+      walletBalancePoysha: 35000,
     },
   });
 
@@ -86,12 +92,14 @@ async function main() {
       name: 'Shirin',
       passwordHash,
       role: 'PASSENGER',
+      walletBalancePoysha: 60000,
     },
     create: {
       email: 'shirin@dhakatesla.com',
       passwordHash,
       name: 'Shirin',
       role: 'PASSENGER',
+      walletBalancePoysha: 60000,
     },
   });
 

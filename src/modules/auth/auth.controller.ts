@@ -30,6 +30,16 @@ export class AuthController {
     return this.authService.getProfile(userId);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('wallet/topup')
+  @HttpCode(HttpStatus.OK)
+  async topupWallet(
+    @CurrentUser('id') userId: string,
+    @Body('amountBdt') amountBdt?: number,
+  ) {
+    return this.authService.topupWallet(userId, amountBdt || 500);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.DRIVER)
   @Get('driver-test')

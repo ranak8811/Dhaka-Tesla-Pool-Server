@@ -9,7 +9,7 @@ import { ZonesService } from '../zones/zones.service.js';
 import { PricingService } from './pricing.service.js';
 import { PoolsService } from '../pools/pools.service.js';
 import { CreateRideDto } from './dto/create-ride.dto.js';
-import { PoolStatus, RideStatus } from '@prisma/client';
+import { PaymentMethod, PoolStatus, RideStatus } from '@prisma/client';
 
 @Injectable()
 export class RidesService {
@@ -44,6 +44,8 @@ export class RidesService {
       throw new BadRequestException('You already have an active ride request in progress');
     }
 
+    const paymentMethod = dto.paymentMethod ?? PaymentMethod.TESLAPAY;
+
     if (dto.poolId) {
       const targetPool = await this.prisma.pool.findUnique({
         where: { id: dto.poolId },
@@ -67,7 +69,23 @@ export class RidesService {
         distanceChargePoysha: fare.distanceChargePoysha * seatsRequested,
         poolDiscountPoysha: fare.poolDiscountPoysha * seatsRequested,
         totalFarePoysha: fare.totalFarePoysha * seatsRequested,
+        paymentMethod,
       };
+
+      if (paymentMethod === PaymentMethod.TESLAPAY) {
+        const passenger = await this.prisma.user.findUnique({
+          where: { id: passengerId },
+          select: { walletBalancePoysha: true },
+        });
+
+        if (passenger && passenger.walletBalancePoysha < scaledFare.totalFarePoysha) {
+          const balanceBdt = (passenger.walletBalancePoysha / 100).toFixed(2);
+          const fareBdt = (scaledFare.totalFarePoysha / 100).toFixed(2);
+          throw new BadRequestException(
+            `Insufficient TeslaPay balance (৳${balanceBdt}). Ride fare is ৳${fareBdt}. Please top up wallet or choose Cash to Captain.`,
+          );
+        }
+      }
 
       return await this.poolsService.reserveSeatAtomic(
         targetPool.id,
@@ -97,7 +115,23 @@ export class RidesService {
       distanceChargePoysha: fare.distanceChargePoysha * seatsRequested,
       poolDiscountPoysha: fare.poolDiscountPoysha * seatsRequested,
       totalFarePoysha: fare.totalFarePoysha * seatsRequested,
+      paymentMethod,
     };
+
+    if (paymentMethod === PaymentMethod.TESLAPAY) {
+      const passenger = await this.prisma.user.findUnique({
+        where: { id: passengerId },
+        select: { walletBalancePoysha: true },
+      });
+
+      if (passenger && passenger.walletBalancePoysha < scaledFare.totalFarePoysha) {
+        const balanceBdt = (passenger.walletBalancePoysha / 100).toFixed(2);
+        const fareBdt = (scaledFare.totalFarePoysha / 100).toFixed(2);
+        throw new BadRequestException(
+          `Insufficient TeslaPay balance (৳${balanceBdt}). Ride fare is ৳${fareBdt}. Please top up wallet or choose Cash to Captain.`,
+        );
+      }
+    }
 
     const pool = await this.poolsService.findCompatibleOpenPool(
       fromZone.name,
@@ -267,6 +301,7 @@ export class RidesService {
       status: ride.status,
       totalFarePoysha: ride.totalFarePoysha,
       fareBdt: Number((ride.totalFarePoysha / 100).toFixed(2)),
+      paymentMethod: ride.paymentMethod,
       paymentStatus: ride.paymentStatus,
       createdAt: ride.createdAt,
       updatedAt: ride.updatedAt,
