@@ -88,13 +88,9 @@ export class DriverService {
       return null;
     }
 
-    return {
-      poolId: pool.id,
-      vehicleName: vehicle.name,
-      occupiedSeats: pool.occupiedSeats,
-      maxCapacity: vehicle.maxCapacity,
-      status: pool.status,
-      passengers: pool.rideRequests.map((ride) => ({
+    const pendingRequests = pool.rideRequests
+      .filter((r) => r.status === RideStatus.REQUESTED)
+      .map((ride) => ({
         rideId: ride.id,
         name: ride.passenger.name,
         pickup: ride.pickupZone,
@@ -104,8 +100,166 @@ export class DriverService {
         status: ride.status,
         paymentMethod: ride.paymentMethod,
         fareBdt: Number((ride.totalFarePoysha / 100).toFixed(2)),
-      })),
+        createdAt: ride.createdAt,
+      }));
+
+    const confirmedPassengers = pool.rideRequests
+      .filter((r) => r.status !== RideStatus.REQUESTED && r.status !== RideStatus.CANCELLED)
+      .map((ride) => ({
+        rideId: ride.id,
+        name: ride.passenger.name,
+        pickup: ride.pickupZone,
+        drop: ride.destinationZone,
+        destination: ride.destinationZone,
+        seats: ride.seatsRequested,
+        status: ride.status,
+        paymentMethod: ride.paymentMethod,
+        fareBdt: Number((ride.totalFarePoysha / 100).toFixed(2)),
+      }));
+
+    return {
+      poolId: pool.id,
+      vehicleName: vehicle.name,
+      occupiedSeats: pool.occupiedSeats,
+      maxCapacity: vehicle.maxCapacity,
+      status: pool.status,
+      passengers: confirmedPassengers,
+      pendingRequests,
     };
+  }
+
+  async acceptRide(driverId: string, rideId: string) {
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { driverId },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found for this driver');
+    }
+
+    const ride = await this.prisma.rideRequest.findUnique({
+      where: { id: rideId },
+      include: { pool: true, passenger: true },
+    });
+
+    if (!ride) {
+      throw new NotFoundException(`Ride with id ${rideId} not found`);
+    }
+
+    if (!ride.pool || ride.pool.vehicleId !== vehicle.id) {
+      throw new ForbiddenException('You can only accept ride requests assigned to your vehicle');
+    }
+
+    if (ride.status !== RideStatus.REQUESTED) {
+      throw new BadRequestException(
+        `Cannot accept ride with status ${ride.status}. Must be REQUESTED.`,
+      );
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      const updatedRide = await tx.rideRequest.update({
+        where: { id: rideId },
+        data: { status: RideStatus.MATCHED },
+        include: {
+          passenger: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+      });
+
+      await tx.rideStatusLog.create({
+        data: {
+          rideId,
+          previousStatus: RideStatus.REQUESTED,
+          newStatus: RideStatus.MATCHED,
+          changedBy: driverId,
+        },
+      });
+
+      return {
+        rideId: updatedRide.id,
+        status: updatedRide.status,
+        passengerName: updatedRide.passenger.name,
+        message: 'Ride request accepted successfully.',
+      };
+    });
+  }
+
+  async rejectRide(driverId: string, rideId: string) {
+    const vehicle = await this.prisma.vehicle.findUnique({
+      where: { driverId },
+    });
+
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found for this driver');
+    }
+
+    const ride = await this.prisma.rideRequest.findUnique({
+      where: { id: rideId },
+      include: {
+        pool: {
+          include: {
+            rideRequests: true,
+          },
+        },
+      },
+    });
+
+    if (!ride) {
+      throw new NotFoundException(`Ride with id ${rideId} not found`);
+    }
+
+    if (!ride.pool || ride.pool.vehicleId !== vehicle.id) {
+      throw new ForbiddenException('You can only decline ride requests assigned to your vehicle');
+    }
+
+    if (ride.status !== RideStatus.REQUESTED) {
+      throw new BadRequestException(
+        `Cannot decline ride with status ${ride.status}. Must be REQUESTED.`,
+      );
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      const updatedRide = await tx.rideRequest.update({
+        where: { id: rideId },
+        data: { status: RideStatus.CANCELLED },
+      });
+
+      await tx.rideStatusLog.create({
+        data: {
+          rideId,
+          previousStatus: RideStatus.REQUESTED,
+          newStatus: RideStatus.CANCELLED,
+          changedBy: driverId,
+        },
+      });
+
+      const remainingSeats = Math.max(0, ride.pool!.occupiedSeats - ride.seatsRequested);
+      const remainingActiveRides = ride.pool!.rideRequests.filter(
+        (r) => r.id !== rideId && r.status !== RideStatus.CANCELLED,
+      );
+
+      const newPoolStatus =
+        remainingActiveRides.length === 0
+          ? PoolStatus.CANCELLED
+          : (ride.pool!.status === PoolStatus.FULL && remainingSeats < 3
+              ? PoolStatus.OPEN
+              : ride.pool!.status);
+
+      await tx.pool.update({
+        where: { id: ride.pool!.id },
+        data: {
+          occupiedSeats: remainingSeats,
+          status: newPoolStatus,
+        },
+      });
+
+      return {
+        rideId: updatedRide.id,
+        status: updatedRide.status,
+        message: 'Ride request declined and seat released.',
+      };
+    });
   }
 
   async updatePoolStatus(
@@ -139,11 +293,15 @@ export class DriverService {
       throw new ForbiddenException('You can only update trips for your own vehicle');
     }
 
-    if (pool.rideRequests.length === 0) {
-      throw new BadRequestException('No active rides in this pool');
+    const activeRides = pool.rideRequests.filter(
+      (r) => r.status !== RideStatus.REQUESTED && r.status !== RideStatus.CANCELLED,
+    );
+
+    if (activeRides.length === 0) {
+      throw new BadRequestException('No accepted active rides in this pool');
     }
 
-    for (const ride of pool.rideRequests) {
+    for (const ride of activeRides) {
       const allowedTargets = VALID_RIDE_TRANSITIONS[ride.status] || [];
       if (!allowedTargets.includes(targetStatus)) {
         throw new BadRequestException(
@@ -165,7 +323,7 @@ export class DriverService {
         data: { status: newPoolStatus },
       });
 
-      const activeRideIds = pool.rideRequests.map((r) => r.id);
+      const activeRideIds = activeRides.map((r) => r.id);
 
       await tx.rideRequest.updateMany({
         where: { id: { in: activeRideIds } },
@@ -178,7 +336,7 @@ export class DriverService {
       });
 
       if (targetStatus === RideStatus.COMPLETED) {
-        for (const ride of pool.rideRequests) {
+        for (const ride of activeRides) {
           if (ride.paymentMethod === PaymentMethod.TESLAPAY) {
             await tx.user.update({
               where: { id: ride.passengerId },
@@ -192,7 +350,7 @@ export class DriverService {
         }
       }
 
-      for (const ride of pool.rideRequests) {
+      for (const ride of activeRides) {
         await tx.rideStatusLog.create({
           data: {
             rideId: ride.id,

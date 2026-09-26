@@ -43,6 +43,24 @@ export class DriverController {
     return this.driverService.getDriverHistory(user.id);
   }
 
+  @Post('rides/:rideId/accept')
+  @HttpCode(HttpStatus.OK)
+  acceptRide(
+    @CurrentUser() user: { id: string },
+    @Param('rideId') rideId: string,
+  ) {
+    return this.driverService.acceptRide(user.id, rideId);
+  }
+
+  @Post('rides/:rideId/reject')
+  @HttpCode(HttpStatus.OK)
+  rejectRide(
+    @CurrentUser() user: { id: string },
+    @Param('rideId') rideId: string,
+  ) {
+    return this.driverService.rejectRide(user.id, rideId);
+  }
+
   @Patch('pools/:poolId/status')
   updatePoolStatus(
     @CurrentUser() user: { id: string },
