@@ -35,6 +35,9 @@ describe('DriverService', () => {
       rideStatusLog: {
         create: vi.fn(),
       },
+      user: {
+        update: vi.fn(),
+      },
     };
 
     service = new DriverService(mockPrisma as any);
@@ -202,6 +205,46 @@ describe('DriverService', () => {
 
       expect(result.status).toBe(PoolStatus.IN_TRANSIT);
       expect(result.rideStatus).toBe(RideStatus.STARTED);
+    });
+
+    it('transitions STARTED -> COMPLETED and deducts passenger wallet balance for TeslaPay rides', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(mockVehicle);
+      mockPrisma.pool.findUnique.mockResolvedValueOnce({
+        id: 'pool-1',
+        vehicleId: 'veh-1',
+        status: PoolStatus.IN_TRANSIT,
+        rideRequests: [
+          {
+            id: 'ride-1',
+            passengerId: 'passenger-nusrat-1',
+            status: RideStatus.STARTED,
+            paymentMethod: 'TESLAPAY',
+            totalFarePoysha: 5812,
+          },
+        ],
+      });
+
+      mockPrisma.pool.update.mockResolvedValueOnce({
+        id: 'pool-1',
+        status: PoolStatus.COMPLETED,
+      });
+
+      const result = await service.updatePoolStatus(
+        'driver-jashim',
+        'pool-1',
+        RideStatus.COMPLETED,
+      );
+
+      expect(result.status).toBe(PoolStatus.COMPLETED);
+      expect(result.rideStatus).toBe(RideStatus.COMPLETED);
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'passenger-nusrat-1' },
+        data: {
+          walletBalancePoysha: {
+            decrement: 5812,
+          },
+        },
+      });
     });
 
     it('Scenario 5: Invalid transition MATCHED -> COMPLETED throws 400 Bad Request', async () => {
