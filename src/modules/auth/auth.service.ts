@@ -35,6 +35,7 @@ export class AuthService {
         email: true,
         name: true,
         role: true,
+        walletBalancePoysha: true,
         createdAt: true,
       },
     });
@@ -47,6 +48,8 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        walletBalancePoysha: user.walletBalancePoysha,
+        walletBalanceBdt: Number((user.walletBalancePoysha / 100).toFixed(2)),
       },
       accessToken,
     };
@@ -74,6 +77,8 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
+        walletBalancePoysha: user.walletBalancePoysha,
+        walletBalanceBdt: Number((user.walletBalancePoysha / 100).toFixed(2)),
       },
       accessToken,
     };
@@ -87,6 +92,7 @@ export class AuthService {
         email: true,
         name: true,
         role: true,
+        walletBalancePoysha: true,
         createdAt: true,
         vehicle: true,
       },
@@ -96,7 +102,33 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    return user;
+    return {
+      ...user,
+      walletBalanceBdt: Number((user.walletBalancePoysha / 100).toFixed(2)),
+    };
+  }
+
+  async topupWallet(userId: string, amountBdt: number = 500) {
+    const amountPoysha = Math.max(100, Math.round(amountBdt * 100));
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        walletBalancePoysha: {
+          increment: amountPoysha,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        walletBalancePoysha: true,
+      },
+    });
+
+    return {
+      message: `Successfully topped up ৳${(amountPoysha / 100).toFixed(2)} to TeslaPay Wallet`,
+      walletBalancePoysha: user.walletBalancePoysha,
+      walletBalanceBdt: Number((user.walletBalancePoysha / 100).toFixed(2)),
+    };
   }
 
   private generateToken(userId: string, email: string, role: string): string {
