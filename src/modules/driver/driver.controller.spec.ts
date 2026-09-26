@@ -39,4 +39,14 @@ describe('DriverController', () => {
     expect(res).toEqual(mockManifest);
     expect(driverService.getActivePool).toHaveBeenCalledWith('driver-jashim');
   });
+
+  it('delegates getHistory to DriverService with current user id', async () => {
+    const mockHistory = [{ poolId: 'pool-completed-1', totalEarningsBdt: 108.12 }];
+    (driverService as any).getDriverHistory = vi.fn().mockResolvedValueOnce(mockHistory);
+
+    const res = await controller.getHistory({ id: 'driver-jashim' });
+
+    expect(res).toEqual(mockHistory);
+    expect((driverService as any).getDriverHistory).toHaveBeenCalledWith('driver-jashim');
+  });
 });

@@ -26,6 +26,7 @@ describe('DriverService', () => {
       pool: {
         findUnique: vi.fn(),
         findFirst: vi.fn(),
+        findMany: vi.fn(),
         update: vi.fn(),
       },
       rideRequest: {
@@ -237,6 +238,90 @@ describe('DriverService', () => {
           RideStatus.DRIVER_ARRIVED,
         ),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('getDriverHistory', () => {
+    it('returns completed pools with calculated earnings and passenger list', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(mockVehicle);
+
+      const mockCompletedPool = {
+        id: 'pool-completed-1',
+        vehicleId: 'veh-1',
+        pickupZone: 'Banani',
+        corridor: 'SouthEast',
+        status: PoolStatus.COMPLETED,
+        occupiedSeats: 2,
+        createdAt: new Date('2026-09-26T08:00:00Z'),
+        rideRequests: [
+          {
+            id: 'ride-1',
+            pickupZone: 'Banani',
+            destinationZone: 'Mohakhali',
+            seatsRequested: 1,
+            status: RideStatus.COMPLETED,
+            totalFarePoysha: 5812,
+            passenger: {
+              id: 'p-1',
+              name: 'Nusrat Jahan',
+              email: 'nusrat@tesla.dhaka',
+            },
+          },
+          {
+            id: 'ride-2',
+            pickupZone: 'Banani',
+            destinationZone: 'Gulshan 1',
+            seatsRequested: 1,
+            status: RideStatus.COMPLETED,
+            totalFarePoysha: 5000,
+            passenger: {
+              id: 'p-2',
+              name: 'Rafiq Islam',
+              email: 'rafiq@tesla.dhaka',
+            },
+          },
+        ],
+      };
+
+      mockPrisma.pool.findMany.mockResolvedValueOnce([mockCompletedPool]);
+
+      const result = await service.getDriverHistory('driver-jashim');
+
+      expect(mockPrisma.vehicle.findUnique).toHaveBeenCalledWith({
+        where: { driverId: 'driver-jashim' },
+      });
+      expect(mockPrisma.pool.findMany).toHaveBeenCalledWith({
+        where: {
+          vehicleId: 'veh-1',
+          status: PoolStatus.COMPLETED,
+        },
+        include: {
+          rideRequests: {
+            include: {
+              passenger: {
+                select: { id: true, name: true, email: true },
+              },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].poolId).toBe('pool-completed-1');
+      expect(result[0].totalEarningsBdt).toBe(108.12); // (5812 + 5000) / 100
+      expect(result[0].passengers).toHaveLength(2);
+      expect(result[0].passengers[0].name).toBe('Nusrat Jahan');
+      expect(result[0].passengers[0].fareBdt).toBe(58.12);
+    });
+
+    it('throws NotFoundException if vehicle not found for driver', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.getDriverHistory('unknown-driver')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });
