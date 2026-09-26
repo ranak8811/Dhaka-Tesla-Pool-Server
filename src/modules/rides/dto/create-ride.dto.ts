@@ -1,4 +1,5 @@
-import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
+import { PaymentMethod } from '@prisma/client';
 
 export class CreateRideDto {
   @IsOptional()
@@ -27,4 +28,8 @@ export class CreateRideDto {
   @Min(1)
   @Max(3)
   seats?: number;
+
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  paymentMethod?: PaymentMethod;
 }

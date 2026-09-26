@@ -4,7 +4,7 @@ import { PricingService } from './pricing.service.js';
 import { ZonesService } from '../zones/zones.service.js';
 import { PoolsService } from '../pools/pools.service.js';
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { PoolStatus, RideStatus } from '@prisma/client';
+import { PaymentMethod, PoolStatus, RideStatus } from '@prisma/client';
 
 describe('RidesService', () => {
   let ridesService: RidesService;
@@ -55,6 +55,9 @@ describe('RidesService', () => {
       },
       vehicle: {
         findFirst: vi.fn(),
+      },
+      user: {
+        findUnique: vi.fn().mockResolvedValue({ walletBalancePoysha: 50000 }),
       },
     };
 
@@ -196,6 +199,19 @@ describe('RidesService', () => {
           destinationZone: 'mohakhali',
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects ride booking if TeslaPay wallet balance is insufficient', async () => {
+      mockPrisma.rideRequest.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.user.findUnique.mockResolvedValueOnce({ walletBalancePoysha: 1000 }); // only ৳10
+
+      await expect(
+        ridesService.requestRide('passenger-nusrat-1', {
+          pickupZone: 'Banani',
+          destinationZone: 'Mohakhali',
+          paymentMethod: PaymentMethod.TESLAPAY,
+        }),
+      ).rejects.toThrow(/Insufficient TeslaPay balance/);
     });
   });
 
