@@ -34,16 +34,22 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum PaymentMethod {
+  TESLAPAY
+  CASH
+}
+
 model User {
-  id           String        @id @default(uuid())
-  email        String        @unique
-  passwordHash String        @map("password_hash")
-  name         String
-  role         Role          @default(PASSENGER)
-  createdAt    DateTime      @default(now()) @map("created_at")
+  id                  String        @id @default(uuid())
+  email               String        @unique
+  passwordHash        String        @map("password_hash")
+  name                String
+  role                Role          @default(PASSENGER)
+  walletBalancePoysha Int           @default(50000) @map("wallet_balance_poysha")
+  createdAt           DateTime      @default(now()) @map("created_at")
   
-  vehicle      Vehicle?
-  rideRequests RideRequest[]
+  vehicle             Vehicle?
+  rideRequests        RideRequest[]
 
   @@map("users")
 }
@@ -91,6 +97,7 @@ model RideRequest {
   distanceChargePoysha Int           @map("distance_charge_poysha")
   poolDiscountPoysha   Int           @default(0) @map("pool_discount_poysha")
   totalFarePoysha      Int           @map("total_fare_poysha")
+  paymentMethod        PaymentMethod @default(TESLAPAY) @map("payment_method")
   paymentStatus        PaymentStatus @default(PENDING) @map("payment_status")
   
   createdAt            DateTime      @default(now()) @map("created_at")
