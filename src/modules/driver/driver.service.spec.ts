@@ -30,6 +30,8 @@ describe('DriverService', () => {
         update: vi.fn(),
       },
       rideRequest: {
+        findUnique: vi.fn(),
+        update: vi.fn(),
         updateMany: vi.fn(),
       },
       rideStatusLog: {
@@ -365,6 +367,117 @@ describe('DriverService', () => {
       await expect(service.getDriverHistory('unknown-driver')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('acceptRide', () => {
+    it('successfully accepts incoming ride request and transitions to MATCHED', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(mockVehicle);
+      mockPrisma.rideRequest.findUnique.mockResolvedValueOnce({
+        id: 'ride-req-1',
+        status: RideStatus.REQUESTED,
+        seatsRequested: 1,
+        pool: { id: 'pool-1', vehicleId: 'veh-1' },
+        passenger: { id: 'p-1', name: 'Nusrat Jahan', email: 'nusrat@tesla.dhaka' },
+      });
+
+      mockPrisma.rideRequest.update.mockResolvedValueOnce({
+        id: 'ride-req-1',
+        status: RideStatus.MATCHED,
+        passenger: { id: 'p-1', name: 'Nusrat Jahan', email: 'nusrat@tesla.dhaka' },
+      });
+
+      const res = await service.acceptRide('driver-jashim', 'ride-req-1');
+
+      expect(res.status).toBe(RideStatus.MATCHED);
+      expect(res.passengerName).toBe('Nusrat Jahan');
+      expect(mockPrisma.rideRequest.update).toHaveBeenCalledWith({
+        where: { id: 'ride-req-1' },
+        data: { status: RideStatus.MATCHED },
+        include: {
+          passenger: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+      });
+      expect(mockPrisma.rideStatusLog.create).toHaveBeenCalledWith({
+        data: {
+          rideId: 'ride-req-1',
+          previousStatus: RideStatus.REQUESTED,
+          newStatus: RideStatus.MATCHED,
+          changedBy: 'driver-jashim',
+        },
+      });
+    });
+
+    it('throws BadRequestException if ride is already MATCHED or not REQUESTED', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(mockVehicle);
+      mockPrisma.rideRequest.findUnique.mockResolvedValueOnce({
+        id: 'ride-req-1',
+        status: RideStatus.MATCHED,
+        pool: { id: 'pool-1', vehicleId: 'veh-1' },
+      });
+
+      await expect(
+        service.acceptRide('driver-jashim', 'ride-req-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws ForbiddenException if ride belongs to a different vehicle', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(mockVehicle);
+      mockPrisma.rideRequest.findUnique.mockResolvedValueOnce({
+        id: 'ride-req-1',
+        status: RideStatus.REQUESTED,
+        pool: { id: 'pool-2', vehicleId: 'different-veh' },
+      });
+
+      await expect(
+        service.acceptRide('driver-jashim', 'ride-req-1'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('rejectRide', () => {
+    it('successfully declines ride, marks CANCELLED, releases pool seats, and logs status', async () => {
+      mockPrisma.vehicle.findUnique.mockResolvedValueOnce(mockVehicle);
+      mockPrisma.rideRequest.findUnique.mockResolvedValueOnce({
+        id: 'ride-req-1',
+        status: RideStatus.REQUESTED,
+        seatsRequested: 1,
+        pool: {
+          id: 'pool-1',
+          vehicleId: 'veh-1',
+          occupiedSeats: 1,
+          status: PoolStatus.OPEN,
+          rideRequests: [
+            { id: 'ride-req-1', status: RideStatus.REQUESTED },
+          ],
+        },
+      });
+
+      mockPrisma.rideRequest.update.mockResolvedValueOnce({
+        id: 'ride-req-1',
+        status: RideStatus.CANCELLED,
+      });
+
+      const res = await service.rejectRide('driver-jashim', 'ride-req-1');
+
+      expect(res.status).toBe(RideStatus.CANCELLED);
+      expect(mockPrisma.pool.update).toHaveBeenCalledWith({
+        where: { id: 'pool-1' },
+        data: {
+          occupiedSeats: 0,
+          status: PoolStatus.CANCELLED,
+        },
+      });
+      expect(mockPrisma.rideStatusLog.create).toHaveBeenCalledWith({
+        data: {
+          rideId: 'ride-req-1',
+          previousStatus: RideStatus.REQUESTED,
+          newStatus: RideStatus.CANCELLED,
+          changedBy: 'driver-jashim',
+        },
+      });
     });
   });
 });

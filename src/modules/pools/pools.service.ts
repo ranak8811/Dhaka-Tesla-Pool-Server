@@ -105,7 +105,7 @@ export class PoolsService {
           pickupZone: fareDetails.pickupZone,
           destinationZone: fareDetails.destinationZone,
           seatsRequested,
-          status: RideStatus.MATCHED,
+          status: RideStatus.REQUESTED,
           baseFarePoysha: fareDetails.baseFarePoysha,
           distanceChargePoysha: fareDetails.distanceChargePoysha,
           poolDiscountPoysha: fareDetails.poolDiscountPoysha,
@@ -141,7 +141,7 @@ export class PoolsService {
         data: {
           rideId: ride.id,
           previousStatus: null,
-          newStatus: RideStatus.MATCHED,
+          newStatus: RideStatus.REQUESTED,
           changedBy: passengerId,
         },
       });
@@ -210,7 +210,7 @@ export class PoolsService {
           pickupZone,
           destinationZone,
           seatsRequested,
-          status: RideStatus.MATCHED,
+          status: RideStatus.REQUESTED,
           baseFarePoysha: fareDetails.baseFarePoysha,
           distanceChargePoysha: fareDetails.distanceChargePoysha,
           poolDiscountPoysha: fareDetails.poolDiscountPoysha,
@@ -237,7 +237,7 @@ export class PoolsService {
         data: {
           rideId: ride.id,
           previousStatus: null,
-          newStatus: RideStatus.MATCHED,
+          newStatus: RideStatus.REQUESTED,
           changedBy: passengerId,
         },
       });

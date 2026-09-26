@@ -49,4 +49,24 @@ describe('DriverController', () => {
     expect(res).toEqual(mockHistory);
     expect((driverService as any).getDriverHistory).toHaveBeenCalledWith('driver-jashim');
   });
+
+  it('delegates acceptRide to DriverService with driverId and rideId', async () => {
+    const mockResult = { rideId: 'ride-1', status: 'MATCHED' };
+    (driverService as any).acceptRide = vi.fn().mockResolvedValueOnce(mockResult);
+
+    const res = await controller.acceptRide({ id: 'driver-jashim' }, 'ride-1');
+
+    expect(res).toEqual(mockResult);
+    expect((driverService as any).acceptRide).toHaveBeenCalledWith('driver-jashim', 'ride-1');
+  });
+
+  it('delegates rejectRide to DriverService with driverId and rideId', async () => {
+    const mockResult = { rideId: 'ride-1', status: 'CANCELLED' };
+    (driverService as any).rejectRide = vi.fn().mockResolvedValueOnce(mockResult);
+
+    const res = await controller.rejectRide({ id: 'driver-jashim' }, 'ride-1');
+
+    expect(res).toEqual(mockResult);
+    expect((driverService as any).rejectRide).toHaveBeenCalledWith('driver-jashim', 'ride-1');
+  });
 });
