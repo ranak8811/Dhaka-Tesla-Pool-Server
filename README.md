@@ -16,8 +16,8 @@
 ## 🌐 Live Deployment & Demo Links
 
 - **🚀 Live Web Application (Vercel):** [https://dhaka-tesla-pool-client.vercel.app](https://dhaka-tesla-pool-client.vercel.app)
-- **📹 6-Minute Loom Walkthrough Video:**  
-  > 🎥 **[Loom Video Recording in Progress — Link will be added here]**  
+- **📹 6-Minute Demonstration Video:**  
+  > 🎥 **[Watch 6-Minute Project Walkthrough Video](https://drive.google.com/file/d/1ZXjkyd79Nad3e8RiXJkZr1K2dZENKWdG/view?usp=sharing)**  
   > *Demonstrates corridor matching, concurrency row-locking under load, manual driver acceptance, and Poysha wallet deduction.*
 
 ---
@@ -98,35 +98,43 @@ All accounts are pre-seeded in the database with password: `Tesla2026!`
 ### End-to-End Architecture
 ```mermaid
 flowchart TD
-    subgraph ClientApp ["Frontend (Next.js 16 + Tailwind CSS)"]
-        PassengerUI["Passenger Booking & Live Tracker"]
-        DriverUI["Captain Console & Incoming Ride Alert"]
-        AuthContext["Auth Context (JWT + TeslaPay Balance)"]
+    subgraph ClientApp ["1. Frontend Client Layer (Next.js 16 + Tailwind CSS)"]
+        PassengerUI["Passenger Web App<br/>(Corridor Booking & Live State Tracker)"]
+        DriverUI["Driver Captain Console<br/>(Dispatch Alerts & Passenger Manifest)"]
     end
 
-    subgraph ServerApp ["Backend API (NestJS 10 + Node.js)"]
-        AuthModule["AuthModule (bcrypt + JWT Guards)"]
-        ZonesModule["ZonesModule (Dhaka Corridor Matrix)"]
-        PricingModule["PricingModule (Poysha Fare Engine)"]
-        PoolsModule["PoolsModule (SELECT FOR UPDATE Row Locking)"]
-        RidesModule["RidesModule (FSM Lifecycle & Audit Logs)"]
-        DriverModule["DriverModule (Accept/Decline & Manifest)"]
+    subgraph ApiGateway ["2. NestJS API Controllers & Routing"]
+        RidesCtrl["Rides Controller<br/>(POST /rides/request)"]
+        DriverCtrl["Driver Controller<br/>(POST /driver/rides/:id/accept)"]
     end
 
-    subgraph DataStore ["Database Layer (Neon PostgreSQL 16)"]
-        UserTable[("users (wallet_balance_poysha)")]
-        VehicleTable[("vehicles (Bullet, max 3)")]
-        PoolTable[("pools (occupied_seats, status)")]
-        RideTable[("ride_requests (status, poysha)")]
-        AuditTable[("ride_status_logs (audit trail)")]
+    subgraph CoreServices ["3. Business Logic & Concurrency Engine"]
+        PricingSvc["Pricing Module<br/>(Dhaka Corridors & Poysha Fare Engine)"]
+        RidesSvc["Rides Module<br/>(FSM Lifecycle: REQUESTED ➔ MATCHED ➔ COMPLETED)"]
+        PoolsSvc["Pools Module<br/>(Pessimistic Row Locking 'SELECT FOR UPDATE')"]
     end
 
-    PassengerUI -->|REST /rides/request| RidesModule
-    DriverUI -->|REST /driver/rides/:id/accept| DriverModule
-    RidesModule --> PoolsModule
-    PoolsModule -->|Pessimistic Row Lock| PoolTable
-    DriverModule --> RideTable
-    DriverModule --> UserTable
+    subgraph DataStore ["4. Persistence Layer (Neon PostgreSQL 16)"]
+        PoolTable[("pools Table<br/>(occupied_seats, vehicle capacity: 3)")]
+        UserTable[("users Table<br/>(wallet_balance_poysha)")]
+        RideTable[("ride_requests Table<br/>(status, passenger_id, poysha)")]
+        AuditTable[("ride_status_logs Table<br/>(immutable audit log trail)")]
+    end
+
+    %% Vertical Cross-Layer Data Flow
+    PassengerUI -->|"1. Submit Booking Request"| RidesCtrl
+    DriverUI -->|"1. Accept / Advance Trip"| DriverCtrl
+
+    RidesCtrl -->|"2. Compute Fare & Validate"| PricingSvc
+    PricingSvc -->|"3. Forward Booking Payload"| RidesSvc
+    DriverCtrl -->|"2. Advance FSM State"| RidesSvc
+
+    RidesSvc -->|"4. Atomic Lock & Seat Allocation"| PoolsSvc
+
+    PoolsSvc -->|"5. SELECT FOR UPDATE Row Lock"| PoolTable
+    PoolsSvc -->|"6. Atomic Wallet Deduction"| UserTable
+    RidesSvc -->|"7. Persist Ride Record"| RideTable
+    RidesSvc -->|"8. Append State Transition Log"| AuditTable
 ```
 
 ### Entity-Relationship Diagram (ERD)
