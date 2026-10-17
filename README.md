@@ -1,7 +1,6 @@
 # Dhaka Tesla Pool (ঢাকা টেসলা পুল) — Server API
 
 > **High-Performance NestJS Backend for Electric Autonomous Corridor Ridesharing in Dhaka City**  
-> *Developed for RobanDevs Engineering Internship Evaluation · P0 Submission*
 
 [![NestJS](https://img.shields.io/badge/NestJS-10.0-E0234E?logo=nestjs&logoColor=white)](https://nestjs.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
