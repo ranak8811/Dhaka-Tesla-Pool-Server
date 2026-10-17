@@ -15,6 +15,7 @@
 ## 🌐 Live Deployment & Demo Links
 
 - **🚀 Live Web Application (Vercel):** [https://dhaka-tesla-pool-client.vercel.app](https://dhaka-tesla-pool-client.vercel.app)
+- **🚀 Frontend Repository (Github):** [https://github.com/ranak8811/Dhaka-Tesla-Pool-Client.git](https://github.com/ranak8811/Dhaka-Tesla-Pool-Client.git)
 - **📹 6-Minute Demonstration Video:**  
   > 🎥 **[Watch 6-Minute Project Walkthrough Video](https://drive.google.com/file/d/1ZXjkyd79Nad3e8RiXJkZr1K2dZENKWdG/view?usp=sharing)**  
   > *Demonstrates corridor matching, concurrency row-locking under load, manual driver acceptance, and Poysha wallet deduction.*
