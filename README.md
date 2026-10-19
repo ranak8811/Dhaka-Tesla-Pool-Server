@@ -15,7 +15,8 @@
 ## 🌐 Live Deployment & Demo Links
 
 - **🚀 Live Web Application (Vercel):** [https://dhaka-tesla-pool-client.vercel.app](https://dhaka-tesla-pool-client.vercel.app)
-- **🚀 Frontend Repository (Github):** [https://github.com/ranak8811/Dhaka-Tesla-Pool-Client.git](https://github.com/ranak8811/Dhaka-Tesla-Pool-Client.git)
+- **🚀 Frontend Repository (GitHub):** [https://github.com/ranak8811/Dhaka-Tesla-Pool-Client.git](https://github.com/ranak8811/Dhaka-Tesla-Pool-Client.git)
+- **🚀 Backend Repository (GitHub):** [https://github.com/ranak8811/Dhaka-Tesla-Pool-Server.git](https://github.com/ranak8811/Dhaka-Tesla-Pool-Server.git)
 - **📹 6-Minute Demonstration Video:**  
   > 🎥 **[Watch 6-Minute Project Walkthrough Video](https://drive.google.com/file/d/1ZXjkyd79Nad3e8RiXJkZr1K2dZENKWdG/view?usp=sharing)**  
   > *Demonstrates corridor matching, concurrency row-locking under load, manual driver acceptance, and Poysha wallet deduction.*
@@ -51,10 +52,11 @@ Dhaka is one of the densest and most congestion-choked megacities in the world. 
 
 **Dhaka Tesla Pool** reimagines urban mobility in Dhaka:
 1. **Dynamic Corridor Pooling:** Aggregates commuters heading along the same geographic corridor (e.g. Banani ➔ Mohakhali / Gulshan) into high-efficiency electric Tesla Model Y vehicles ("Bullet").
-2. **Strict Physical Capacity (Max 3 Seats):** Bullet accommodates at most 3 passengers per trip.
-3. **Pessimistic Concurrency Row-Locking:** Eliminates race conditions so overbooking is physically impossible at the database level.
-4. **Poysha-Accurate FinTech Billing:** Currency math is computed in integer Poysha (1 BDT = 100 Poysha), preventing floating-point drift and supporting exact micro-discounts.
-5. **Captain Manual Acceptance Workflow:** Drivers explicitly accept or decline incoming corridor ride requests before dispatch.
+2. **AI Corridor Intelligence (Google Gemini `gemini-3.5-flash-lite`):** Real-time congestion forecasting, traffic-adjusted dynamic ETA predictions, dynamic rush-hour surge pricing, and Model Y battery discharge estimates.
+3. **Strict Physical Capacity (Max 3 Seats):** Bullet accommodates at most 3 passengers per trip.
+4. **Pessimistic Concurrency Row-Locking:** Eliminates race conditions so overbooking is physically impossible at the database level.
+5. **Poysha-Accurate FinTech Billing:** Currency math is computed in integer Poysha (1 BDT = 100 Poysha), preventing floating-point drift and supporting exact micro-discounts.
+6. **Captain Manual Acceptance Workflow:** Drivers explicitly accept or decline incoming corridor ride requests before dispatch.
 
 ---
 
@@ -296,6 +298,51 @@ if (targetStatus === RideStatus.COMPLETED) {
   }
 }
 ```
+
+---
+
+## 🧠 AI / ML Practical Feature: Corridor Demand & Congestion Forecaster (NT Tech Assessment Section 2)
+
+As specified in **NT Tech Innovation Practical Assessment (Section 2 & 5)**, this project includes an integrated AI-powered corridor traffic delay, demand surge, and commuter intelligence engine powered by Google Gemini (`gemini-3.5-flash-lite`).
+
+### 1. Problem Solved
+Dhaka's urban transit corridors (e.g. Banani ➔ Mohakhali, Gulshan ➔ Farmgate) suffer from extreme variance in transit duration. A 3.5 km trip can take 8 minutes at night but over 45 minutes during evening office rush hours due to bottleneck choke points (e.g. Mohakhali rail gate, Banani 11 crossing). Standard static distance-based fare calculations fail to capture demand surges or communicate real delay risks. 
+
+Our AI service evaluates real-time corridor geography, departure hour, and distance to generate dynamic ETA adjustments, peak congestion classification, and commuter advice encouraging electric pooling.
+
+### 2. Model Architecture & Endpoints
+- **AI Model:** Google Gemini (`gemini-3.5-flash-lite` configured via `GEMINI_MODEL` and `GEMINI_API_KEY`)
+- **Primary Endpoint:** `POST /api/v1/ai/corridor-forecast`
+- **Quote Integration:** Automatically enriched inside `POST /api/v1/rides/quote`
+- **Health Verification:** `GET /api/v1/ai/health`
+- **Resilience Design:** Graceful fallback to a deterministic Dhaka corridor traffic heuristic if the external API key is unconfigured, rate-limited, or offline.
+
+### 3. Inputs & Outputs Specification
+
+| Direction | Field | Type | Description / Example |
+|---|---|---|---|
+| **Input** | `pickupZone` | `string` | Origin zone (e.g. `"Banani"`) |
+| **Input** | `destinationZone` | `string` | Destination zone (e.g. `"Mohakhali"`) |
+| **Input** | `distanceKm` | `number` | Corridor distance in km (e.g. `3.5`) |
+| **Input** | `departureTime` / Hour | `string` / `number` | Time of day and day of week for rush-hour analysis |
+| **Output** | `congestionLevel` | `enum` | `"LOW"` \| `"MODERATE"` \| `"HEAVY"` \| `"SEVERE_GRIDLOCK"` |
+| **Output** | `predictedDurationMinutes` | `number` | AI-predicted travel duration in Dhaka traffic (e.g. `28` mins) |
+| **Output** | `delayMinutes` | `number` | Corridor congestion delay relative to free-flow (e.g. `16` mins) |
+| **Output** | `demandSurgeMultiplier` | `number` | Dynamic surge coefficient (e.g. `1.15x` during peak hours) |
+| **Output** | `demandLevel` | `enum` | `"LOW"` \| `"NORMAL"` \| `"PEAK_RUSH"` |
+| **Output** | `smartRecommendation` | `string` | Actionable advice explaining how Bullet EV pooling avoids traffic |
+| **Output** | `batteryConsumptionPercent` | `number` | Tesla Model Y battery consumption estimate (e.g. `~0.8%`) |
+| **Output** | `co2SavedKg` | `number` | Tailpipe emissions avoided vs combustion vehicles (e.g. `0.49 kg`) |
+| **Output** | `confidenceScore` | `number` | Model inference certainty (e.g. `0.92`) |
+
+### 4. Known Limitations
+1. **Lack of Live Dhaka IoT Sensor Feeds:** In the absence of live municipal GPS loop detectors or Dhaka Traffic Police API feeds, inference is synthesized using corridor topology, scheduled rush hour patterns, and LLM geospatial reasoning.
+2. **Flash Obstructions:** Sudden VIP motorcades, impromptu street rallies, or sudden waterlogging cannot be detected without external live camera/feed integration.
+3. **API Rate Quotas:** High-frequency polling on free-tier Gemini API keys can encounter quota throttles; the system transparently switches to the offline corridor heuristic without failing user requests.
+
+### 5. Evaluation of Usefulness & Impact
+1. **Accuracy Metric (MAE):** Evaluated against historical corridor trip durations (`RideStatusLog` audit delta). Target Mean Absolute Error (MAE) $< 6.5\text{ minutes}$ across the 8 Dhaka zones.
+2. **FinTech Business Impact:** The 25% pooled discount combined with real-time AI surge warnings creates a high-conversion incentive for solo commuters to adopt electric corridor pooling during peak rush hours.
 
 ---
 
