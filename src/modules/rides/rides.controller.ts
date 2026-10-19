@@ -19,6 +19,7 @@ import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { Role } from '@prisma/client';
+import { AiService } from '../ai/ai.service.js';
 
 @Controller('rides')
 export class RidesController {
@@ -26,10 +27,11 @@ export class RidesController {
     private readonly pricingService: PricingService,
     private readonly zonesService: ZonesService,
     private readonly ridesService: RidesService,
+    private readonly aiService: AiService,
   ) {}
 
   @Post('quote')
-  getQuote(@Body() dto: QuoteRequestDto) {
+  async getQuote(@Body() dto: QuoteRequestDto) {
     let distanceKm = dto.distanceKm;
     let pickupZone = dto.pickupZone;
     let destinationZone = dto.destinationZone;
@@ -46,7 +48,29 @@ export class RidesController {
       );
     }
 
-    return this.pricingService.generateQuote(distanceKm, pickupZone, destinationZone);
+    const quote = this.pricingService.generateQuote(
+      distanceKm,
+      pickupZone,
+      destinationZone,
+    );
+
+    let aiForecast = null;
+    if (this.aiService) {
+      try {
+        aiForecast = await this.aiService.getCorridorForecast({
+          pickupZone: pickupZone || 'Banani',
+          destinationZone: destinationZone || 'Mohakhali',
+          distanceKm,
+        });
+      } catch {
+        // Non-blocking fallback
+      }
+    }
+
+    return {
+      ...quote,
+      aiForecast,
+    };
   }
 
   @Post('request')

@@ -25,6 +25,7 @@ export interface FareQuote {
     totalFareBdt: number;
     savingsBdt: number;
   };
+  aiForecast?: any;
 }
 
 @Injectable()
